@@ -1,8 +1,11 @@
+#include <Adafruit_BNO055.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_GPS.h>
 #include <Adafruit_SH110X.h>
+#include <Adafruit_Sensor.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <utility/imumaths.h>
 
 #define GPSSerial Serial1
 
@@ -10,13 +13,14 @@
 #define BUTTON_B 6
 #define BUTTON_C 5
 
+Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28);
 Adafruit_SH1107 display = Adafruit_SH1107(64, 128, &Wire);
 Adafruit_GPS GPS(&GPSSerial);
 
 uint32_t timer = millis();
 
 float distanceBetween(float lat1, float lon1, float lat2, float lon2) {
-  // Uses the haversine formulat to calculate the distance between two
+  // Uses the haversine formula to calculate the distance between two
   // coordinates in meters. The coordinates must be in degrees.
 
   float dlon = radians(lon2 - lon1);
@@ -45,6 +49,10 @@ void setup() {
   display.setTextColor(SH110X_WHITE);
   display.clearDisplay();
   display.display();
+
+  // Bno
+  bno.begin();
+  bno.setExtCrystalUse(true);  // Use external crystal for better accuracy.
 }
 
 void loop() {
@@ -57,6 +65,9 @@ void loop() {
 
   if (millis() - timer > 2000) {
     timer = millis();
+
+    sensors_event_t event;
+    bno.getEvent(&event);
 
     display.clearDisplay();
     display.setCursor(0, 0);
@@ -88,6 +99,18 @@ void loop() {
     // Line 4. distance.
     display.print("Dist: ");
     display.println(distanceBetween(GPS.latitudeDegrees, GPS.longitudeDegrees, 52.4771458, 13.4220666));
+
+    // Line 5. bno calibration
+    uint8_t sys, gyro, accel, mag = 0;
+    bno.getCalibration(&sys, &gyro, &accel, &mag);
+    display.print(F("Bno: "));
+    display.print(sys, DEC);
+    display.print(F(" "));
+    display.print(gyro, DEC);
+    display.print(F(" "));
+    display.print(accel, DEC);
+    display.print(F(" "));
+    display.println(mag, DEC);
 
     display.display();
   }
