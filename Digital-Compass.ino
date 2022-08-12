@@ -19,9 +19,25 @@ Adafruit_GPS GPS(&GPSSerial);
 
 uint32_t timer = millis();
 
-const int16_t x0 = 105;
-const int16_t y0 = 35;
-const int16_t r = 20;
+float bearingTo(float lat1, float lon1, float lat2, float lon2) {
+  // Calculates the initial bearing to reach second coordinate.
+  // North is 0° or 360. West is 270°.
+
+  float dlon = radians(lon2 - lon1);
+
+  lat1 = radians(lat1);
+  lat2 = radians(lat2);
+
+  float y = sin(dlon) * cos(lat2);
+  float x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlon);
+  float theta = atan2(y, x);
+
+  if (theta < 0) {
+    theta += TWO_PI;
+  }
+
+  return degrees(theta);
+}
 
 float distanceBetween(float lat1, float lon1, float lat2, float lon2) {
   // Uses the haversine formula to calculate the distance between two
@@ -88,8 +104,6 @@ void loop() {
     // Line 0, fix status, quality, and satellite count.
     display.print("Fix: ");
     display.print((int)GPS.fix);
-    display.print(" Q: ");
-    display.print((int)GPS.fixquality);
     display.print(" Sat: ");
     display.println((int)GPS.satellites);
 
@@ -125,10 +139,19 @@ void loop() {
     display.print(F(" "));
     display.println(mag, DEC);
 
-    // Compass
-    float heading = 45;
+    // Compas
+    float bearing = bearingTo(GPS.latitudeDegrees, GPS.longitudeDegrees, 52.4771458, 13.4220666);
+    bearing = (int)(360 + 90 - bearing) % 360;  // Convert bearing to standard angle.
+
+    float x0 = 105;
+    float y0 = 35;
+    float r = 18;
+    int16_t x1 = x0 + r * cos(radians(bearing));
+    int16_t y1 = y0 - r * sin(radians(bearing));
+    display.print("Ang: ");
+    display.println(bearing, 1);
     display.drawCircle(x0, y0, r, SH110X_WHITE);
-    display.drawLine(x0, y0, x0 + r * cos(radians(heading)), y0 - r * sin(radians(heading)), SH110X_WHITE);
+    display.drawLine(x0, y0, x1, y1, SH110X_WHITE);
 
     display.display();
   }
