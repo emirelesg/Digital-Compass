@@ -53,6 +53,11 @@ void setup() {
   // Bno
   bno.begin();
   bno.setExtCrystalUse(true);  // Use external crystal for better accuracy.
+
+  // Buttons
+  pinMode(BUTTON_A, INPUT_PULLUP);
+  pinMode(BUTTON_B, INPUT_PULLUP);
+  pinMode(BUTTON_C, INPUT_PULLUP);
 }
 
 void loop() {
@@ -62,6 +67,10 @@ void loop() {
     Serial.println(GPS.lastNMEA());
     GPS.parse(GPS.lastNMEA());
   }
+
+  if (!digitalRead(BUTTON_A)) Serial.print("A");
+  if (!digitalRead(BUTTON_B)) Serial.print("B");
+  if (!digitalRead(BUTTON_C)) Serial.print("C");
 
   if (millis() - timer > 2000) {
     timer = millis();
