@@ -19,6 +19,10 @@ Adafruit_GPS GPS(&GPSSerial);
 
 uint32_t timer = millis();
 
+const int16_t x0 = 105;
+const int16_t y0 = 35;
+const int16_t r = 20;
+
 float distanceBetween(float lat1, float lon1, float lat2, float lon2) {
   // Uses the haversine formula to calculate the distance between two
   // coordinates in meters. The coordinates must be in degrees.
@@ -120,6 +124,11 @@ void loop() {
     display.print(accel, DEC);
     display.print(F(" "));
     display.println(mag, DEC);
+
+    // Compass
+    float heading = 45;
+    display.drawCircle(x0, y0, r, SH110X_WHITE);
+    display.drawLine(x0, y0, x0 + r * cos(radians(heading)), y0 - r * sin(radians(heading)), SH110X_WHITE);
 
     display.display();
   }
