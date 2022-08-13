@@ -3,12 +3,13 @@
 #include <Adafruit_GPS.h>
 #include <Adafruit_SH110X.h>
 #include <Adafruit_Sensor.h>
+#include <SD.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <utility/imumaths.h>
 
 #define GPSSerial Serial1
-
+#define SD_CS 4
 #define BUTTON_A 9
 #define BUTTON_B 6
 #define BUTTON_C 5
@@ -16,6 +17,12 @@
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28);
 Adafruit_SH1107 display = Adafruit_SH1107(64, 128, &Wire);
 Adafruit_GPS GPS(&GPSSerial);
+
+File calibration;
+
+adafruit_bno055_offsets_t calibrationData;
+boolean calibrationSaved = false;
+boolean isCalibrated = false;
 
 uint32_t timer = millis();
 
@@ -60,7 +67,35 @@ void setup() {
   GPS.begin(9600);
   GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
   GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);  // 1 Hz update rate.
-  delay(1000);
+
+  // Bno
+  bno.begin(bno.OPERATION_MODE_COMPASS);
+
+  // Configuration that matches build.
+  // See pg. 25 on BNO055 datasheet for details on remapping.
+  bno.setAxisRemap(bno.REMAP_CONFIG_P6);
+  bno.setAxisSign(bno.REMAP_SIGN_P6);
+
+  // SD card
+  if (SD.begin(SD_CS)) {
+    calibration = SD.open("IMU.BIN", FILE_READ);
+    if (calibration) {
+      calibration.read((uint8_t *)&calibrationData, sizeof(calibrationData));
+      calibration.close();
+      bno.setSensorOffsets(calibrationData);
+      isCalibrated = true;
+    }
+  } else {
+    Serial.println("[Err] SD init");
+  }
+
+  // Crystal must be configured after calibration is loaded.
+  bno.setExtCrystalUse(true);  // Use external crystal for better accuracy.
+
+  // Buttons
+  pinMode(BUTTON_A, INPUT_PULLUP);
+  pinMode(BUTTON_B, INPUT_PULLUP);
+  pinMode(BUTTON_C, INPUT_PULLUP);
 
   // OLED init
   display.begin(0x3C, true);
@@ -69,26 +104,12 @@ void setup() {
   display.setTextColor(SH110X_WHITE);
   display.clearDisplay();
   display.display();
-
-  // Bno
-  bno.begin(bno.OPERATION_MODE_NDOF);
-  // Configuration that matches build.
-  // See pg. 25 on BNO055 datasheet for details on remapping.
-  bno.setAxisRemap(bno.REMAP_CONFIG_P6);
-  bno.setAxisSign(bno.REMAP_SIGN_P6);
-  bno.setExtCrystalUse(true);  // Use external crystal for better accuracy.
-
-  // Buttons
-  pinMode(BUTTON_A, INPUT_PULLUP);
-  pinMode(BUTTON_B, INPUT_PULLUP);
-  pinMode(BUTTON_C, INPUT_PULLUP);
 }
 
 void loop() {
   GPS.read();
 
   if (GPS.newNMEAreceived()) {
-    Serial.println(GPS.lastNMEA());
     GPS.parse(GPS.lastNMEA());
   }
 
@@ -144,12 +165,6 @@ void loop() {
     float heading = orientationData.orientation.x;
     int headingStd = (int)(360 + 90 + heading) % 360;  // Convert heading to standard angle.
 
-    // float magnetic = atan2(magnetometerData.magnetic.y, magnetometerData.magnetic.x);
-    // if (magnetic < 0.0) heading += TWO_PI;
-    // magnetic = degrees(magnetic);
-
-    // float headingInt = (int)(360 + heading) % 360;
-
     float bearing = bearingTo(GPS.latitudeDegrees, GPS.longitudeDegrees, 52.4771458, 13.4220666);
     int bearingStd = (int)(360 + headingStd - bearing) % 360;  // Convert bearing to standard angle.
 
@@ -175,5 +190,22 @@ void loop() {
     display.drawLine(x0, y0, x1_heading, y1_heading, SH110X_WHITE);
 
     display.display();
+
+    if (!isCalibrated && bno.isFullyCalibrated()) {
+      bno.getSensorOffsets(calibrationData);
+
+      if (SD.exists("IMU.BIN")) {
+        SD.remove("IMU.BIN");
+      }
+
+      calibration = SD.open("IMU.BIN", FILE_WRITE);
+
+      if (calibration) {
+        calibration.write((uint8_t *)&calibrationData, sizeof(calibrationData));
+        calibration.close();
+      }
+
+      isCalibrated = true;
+    }
   }
 }
