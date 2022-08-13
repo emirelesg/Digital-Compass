@@ -72,9 +72,11 @@ void setup() {
 
   // Bno
   bno.begin(bno.OPERATION_MODE_NDOF);
+  // Configuration that matches build.
+  // See pg. 25 on BNO055 datasheet for details on remapping.
   bno.setAxisRemap(bno.REMAP_CONFIG_P6);
-  bno.setAxisSign(bno.REMAP_SIGN_P6);  // Invert Z axis.
-  bno.setExtCrystalUse(true);          // Use external crystal for better accuracy.
+  bno.setAxisSign(bno.REMAP_SIGN_P6);
+  bno.setExtCrystalUse(true);  // Use external crystal for better accuracy.
 
   // Buttons
   pinMode(BUTTON_A, INPUT_PULLUP);
@@ -137,16 +139,19 @@ void loop() {
     // Bearing and heading calculations.
     sensors_event_t orientationData, magnetometerData;
     bno.getEvent(&magnetometerData, Adafruit_BNO055::VECTOR_MAGNETOMETER);
-    // bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
+    bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
 
-    float heading = atan2(magnetometerData.magnetic.y, magnetometerData.magnetic.x);
-    if (heading < 0.0) heading += TWO_PI;
+    float heading = orientationData.orientation.x;
+    int headingStd = (int)(360 + 90 + heading) % 360;  // Convert heading to standard angle.
 
-    float headingInt = (int)(360 + degrees(heading)) % 360;
+    // float magnetic = atan2(magnetometerData.magnetic.y, magnetometerData.magnetic.x);
+    // if (magnetic < 0.0) heading += TWO_PI;
+    // magnetic = degrees(magnetic);
+
+    // float headingInt = (int)(360 + heading) % 360;
 
     float bearing = bearingTo(GPS.latitudeDegrees, GPS.longitudeDegrees, 52.4771458, 13.4220666);
-    // int bearingStd = (int)(360 + 90 - bearing) % 360;  // Convert bearing to standard angle.
-    int bearingStd = (int)(360 + degrees(heading) - bearing) % 360;  // Convert bearing to standard angle.
+    int bearingStd = (int)(360 + headingStd - bearing) % 360;  // Convert bearing to standard angle.
 
     // Line 5. Bearing
     float x0 = 105;
@@ -154,19 +159,19 @@ void loop() {
     float r = 18;
     display.drawCircle(x0, y0, r, SH110X_WHITE);
 
-    int16_t x1 = x0 + r * cos(radians(bearingStd));
-    int16_t y1 = y0 - r * sin(radians(bearingStd));
-
-    display.print("Ang: ");
-    display.println(bearingStd, 1);
-    display.drawLine(x0, y0, x1, y1, SH110X_WHITE);
-
-    // Line 6. Heading
-    int16_t x1_heading = x0 + 0.5 * r * cos(radians(headingInt));
-    int16_t y1_heading = y0 - 0.5 * r * sin(radians(headingInt));
+    int16_t x1 = x0 + 0.5 * r * cos(radians(headingStd));
+    int16_t y1 = y0 - 0.5 * r * sin(radians(headingStd));
 
     display.print("Head: ");
-    display.println(headingInt, 1);
+    display.println(headingStd, 1);
+    display.drawLine(x0, y0, x1, y1, SH110X_WHITE);
+
+    // Line 6. Bearing
+    int16_t x1_heading = x0 + r * cos(radians(bearingStd));
+    int16_t y1_heading = y0 - r * sin(radians(bearingStd));
+
+    display.print("Bear: ");
+    display.println(bearingStd, 1);
     display.drawLine(x0, y0, x1_heading, y1_heading, SH110X_WHITE);
 
     display.display();
