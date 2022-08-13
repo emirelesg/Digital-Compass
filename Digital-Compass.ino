@@ -71,8 +71,10 @@ void setup() {
   display.display();
 
   // Bno
-  bno.begin();
-  bno.setExtCrystalUse(true);  // Use external crystal for better accuracy.
+  bno.begin(bno.OPERATION_MODE_NDOF);
+  bno.setAxisRemap(bno.REMAP_CONFIG_P6);
+  bno.setAxisSign(bno.REMAP_SIGN_P6);  // Invert Z axis.
+  bno.setExtCrystalUse(true);          // Use external crystal for better accuracy.
 
   // Buttons
   pinMode(BUTTON_A, INPUT_PULLUP);
@@ -92,11 +94,8 @@ void loop() {
   if (!digitalRead(BUTTON_B)) Serial.print("B");
   if (!digitalRead(BUTTON_C)) Serial.print("C");
 
-  if (millis() - timer > 2000) {
+  if (millis() - timer > 300) {
     timer = millis();
-
-    sensors_event_t event;
-    bno.getEvent(&event);
 
     display.clearDisplay();
     display.setCursor(0, 0);
@@ -119,15 +118,11 @@ void loop() {
     // display.print(GPS.longitude, 4);
     // display.println(GPS.lon);
 
-    // Line 3, altitude.
-    display.print("Alt: ");
-    display.println(GPS.altitude, 2);
-
-    // Line 4. distance.
+    // Line 3. distance.
     display.print("Dist: ");
     display.println(distanceBetween(GPS.latitudeDegrees, GPS.longitudeDegrees, 52.4771458, 13.4220666));
 
-    // Line 5. bno calibration
+    // Line 4. bno calibration
     uint8_t sys, gyro, accel, mag = 0;
     bno.getCalibration(&sys, &gyro, &accel, &mag);
     display.print(F("Bno: "));
@@ -139,19 +134,40 @@ void loop() {
     display.print(F(" "));
     display.println(mag, DEC);
 
-    // Compas
-    float bearing = bearingTo(GPS.latitudeDegrees, GPS.longitudeDegrees, 52.4771458, 13.4220666);
-    bearing = (int)(360 + 90 - bearing) % 360;  // Convert bearing to standard angle.
+    // Bearing and heading calculations.
+    sensors_event_t orientationData, magnetometerData;
+    bno.getEvent(&magnetometerData, Adafruit_BNO055::VECTOR_MAGNETOMETER);
+    // bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
 
+    float heading = atan2(magnetometerData.magnetic.y, magnetometerData.magnetic.x);
+    if (heading < 0.0) heading += TWO_PI;
+
+    float headingInt = (int)(360 + degrees(heading)) % 360;
+
+    float bearing = bearingTo(GPS.latitudeDegrees, GPS.longitudeDegrees, 52.4771458, 13.4220666);
+    // int bearingStd = (int)(360 + 90 - bearing) % 360;  // Convert bearing to standard angle.
+    int bearingStd = (int)(360 + degrees(heading) - bearing) % 360;  // Convert bearing to standard angle.
+
+    // Line 5. Bearing
     float x0 = 105;
     float y0 = 35;
     float r = 18;
-    int16_t x1 = x0 + r * cos(radians(bearing));
-    int16_t y1 = y0 - r * sin(radians(bearing));
-    display.print("Ang: ");
-    display.println(bearing, 1);
     display.drawCircle(x0, y0, r, SH110X_WHITE);
+
+    int16_t x1 = x0 + r * cos(radians(bearingStd));
+    int16_t y1 = y0 - r * sin(radians(bearingStd));
+
+    display.print("Ang: ");
+    display.println(bearingStd, 1);
     display.drawLine(x0, y0, x1, y1, SH110X_WHITE);
+
+    // Line 6. Heading
+    int16_t x1_heading = x0 + 0.5 * r * cos(radians(headingInt));
+    int16_t y1_heading = y0 - 0.5 * r * sin(radians(headingInt));
+
+    display.print("Head: ");
+    display.println(headingInt, 1);
+    display.drawLine(x0, y0, x1_heading, y1_heading, SH110X_WHITE);
 
     display.display();
   }
